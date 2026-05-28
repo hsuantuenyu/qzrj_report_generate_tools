@@ -1,3 +1,7 @@
+/****************************************************************
+*描述：主诉、现病史明细查询结果统计，导出Excel模板：qzrj_chief_detail.xlsx
+*修改日期范围：
+*****************************************************************/
 with tmp_level_chief as (
 select 'emr_outpatient_record' table_name,'门（急）诊病历' table_comment,'present_illness_his' field_name,'现病史' field_comment,'1' column_level from cdc_emr_quality_check limit 1 union all
 select 'emr_outpatient_record' table_name,'门（急）诊病历' table_comment,'present_illness_his' field_name,'现病史' field_comment,'1' column_level from cdc_emr_quality_check limit 1 union all
@@ -11,30 +15,7 @@ select 'emr_outpatient_record' table_name,'门（急）诊病历' table_comment,
 select 'emr_activity_info' table_name,'诊疗活动信息' table_comment,'chief_complaint' field_name,'主诉' field_comment,'1' column_level from cdc_emr_quality_check limit 1 union all
 select 'emr_admission_info' table_name,'入院记录' table_comment,'chief_complaint' field_name,'主诉' field_comment,'1' column_level from cdc_emr_quality_check limit 1 union all
 select 'emr_activity_info' table_name,'诊疗活动信息' table_comment,'chief_complaint' field_name,'主诉' field_comment,'1' column_level from cdc_emr_quality_check limit 1 
-),
-tmp_table_list as (
-    select table_name,'患者基本信息表'table_comment,'1' table_level, 1 table_seq  from cdc_emr_quality_check where table_name='emr_patient_info' limit 1 union all
-    select table_name,'诊疗活动信息表' table_comment,'1'  table_level,2 table_seq  from cdc_emr_quality_check where table_name='emr_activity_info' limit 1 union all
-    select table_name,'传染病报告卡' table_comment,'1'  table_level ,3 table_seq  from cdc_emr_quality_check where table_name='emr_inf_report' limit 1 union all
-    select table_name,'检验报告' table_comment,'2'  table_level ,13 table_seq from cdc_emr_quality_check where table_name='emr_ex_lab' limit 1 union all
-    select table_name,'检验报告项目' table_comment,'2'  table_level ,14 table_seq  from cdc_emr_quality_check where table_name='emr_ex_lab_item' limit 1 union all
-    select table_name,'门（急）诊病历' table_comment,'3'  table_level , 4 table_seq from cdc_emr_quality_check where table_name='emr_outpatient_record' limit 1 union all
-    select table_name,'门（急）诊留观记录' table_comment,'3'  table_level, 5 table_seq  from cdc_emr_quality_check where table_name='emr_outpatient_obs' limit 1 union all
-    select table_name,'入院记录' table_comment,'3'  table_level,6 table_seq  from cdc_emr_quality_check where table_name='emr_admission_info' limit 1 union all
-    select table_name,'住院首次病程记录' table_comment,'3'  table_level,7 table_seq  from cdc_emr_quality_check where table_name='emr_first_course' limit 1 union all
-    select table_name,'住院日常病程记录' table_comment,'3'  table_level, 8 table_seq  from cdc_emr_quality_check where table_name='emr_daily_course' limit 1 union all
-    select table_name,'住院病案首页' table_comment,'3'  table_level,9 table_seq  from cdc_emr_quality_check where table_name='emr_admission_record' limit 1 union all
-    select table_name,'出院记录' table_comment,'3'  table_level,10 table_seq  from cdc_emr_quality_check where table_name='emr_discharge_info' limit 1 union all
-    select table_name,'检查报告' table_comment,'3'  table_level,11 table_seq  from cdc_emr_quality_check where table_name='emr_ex_clinical' limit 1 union all
-    select table_name,'检查报告项目' table_comment,'3'  table_level,12 table_seq  from cdc_emr_quality_check where table_name='emr_ex_clinical_item' limit 1 union all
-    select table_name,'医嘱处方信息' table_comment,'3'  table_level,15 table_seq  from cdc_emr_quality_check where table_name='emr_order' limit 1 union all
-    select table_name,'医嘱处方条目' table_comment,'3'  table_level,16 table_seq  from cdc_emr_quality_check where table_name='emr_order_item' limit 1 union all
-    select table_name,'死亡信息' table_comment,'3'  table_level,17 table_seq  from cdc_emr_quality_check where table_name='emr_death_info' limit 1 union all
-    select table_name,'生命体征护理记录单' table_comment,'3'  table_level,18 table_seq  from cdc_emr_quality_check where table_name='emr_vital_signs_record' limit 1
-),
-tmp_org_list as 
-(select distinct city,org_code,org_name from cdc_mdm_org_code where is_516='是')
-,tmp_records as (
+),tmp_records as (
   select 
   b.org_id,
   b.table_name,
@@ -45,8 +26,8 @@ tmp_org_list as
  case when total_records > 0 then total_records - null_violations end as notnull_records
  from cdc_emr_quality_check b
 where  b.check_type in('1', '2', '3')
-  and FROM_UNIXTIME(b.check_time / 1000) >='2026-04-13 00:00:00'
-  and FROM_UNIXTIME(b.check_time / 1000) <='2026-04-13 00:00:00'
+  and FROM_UNIXTIME(b.check_time / 1000) >='2026-05-25 00:00:00'
+  and FROM_UNIXTIME(b.check_time / 1000) <'2026-05-26 00:00:00'
 )
 select a.city,
 a.org_code,
@@ -61,10 +42,10 @@ sum(total_records) total_records,
     case when sum(total_records)>0 then 
        round((sum(notnull_records)/sum(total_records))*100,2)
     end  notnull_rate
- from  tmp_org_list a ,tmp_records f
+ from  ods_tem_cdc_v211_org_code_new a ,tmp_records f
   join tmp_level_chief c on c.table_name = f.table_name and c.field_name = f.field_name
-  left join tmp_table_list d on f.table_name = d.table_name
+  join ods_tem_emr_table_list d on f.table_name = d.table_name
  where a.org_code = f.org_id
  group by a.city, a.org_code, a.org_name, f.table_name, c.table_comment,f.field_name,c.field_comment,d.table_seq
  order by a.city, a.org_code,d.table_seq
- limit 30000
+ limit 50000;

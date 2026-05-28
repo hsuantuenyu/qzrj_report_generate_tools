@@ -196,6 +196,24 @@ from org_list a
 where a.is_516_flag = '是'
 order by a.city, a.org_code;
 
+-- 条件必填字段Sheet页明细
+select a.city,
+       a.org_code,
+       a.org_name,
+       b.table_name,
+       b.table_comment,
+       b.total_records,
+       b.notnull_records,
+       case
+           when total_records is null then null
+           when total_records = 0 then '-'
+           else
+               concat(b.notnull_rate, '%') end notnull_rate
+from org_list a
+         left join qzrj_column_level_3_detail b on a.org_code = b.org_code
+where a.is_516_flag = '是'
+order by a.city, a.org_code;
+
 -- 4.关联关系Sheet页明细
 select a.city,a.org_code,a.org_name,
        b.table_name,
@@ -212,7 +230,6 @@ select a.city,a.org_code,a.org_name,
     left join  qzrj_association_detail b on b.org_code = a.org_code
 where a.is_516_flag ='是'
 order by a.city,a.org_code;
-
 
 -- 值域一致性Sheet页明细
 select a.city,
@@ -254,7 +271,7 @@ from org_list a
 where a.is_516_flag = '是'
 order by a.city, a.org_code;
 
---现病史Sheet页明细明细
+-- 现病史Sheet页明细明细
 select a.city,
        a.org_code,
        a.org_name,
@@ -277,7 +294,7 @@ order by a.city, a.org_code;
 
 
 -- 机构汇总Sheet页明细
---qzrj_realtime_org
+-- qzrj_realtime_org
 select a.city,
        a.org_code,
        a.org_name,
@@ -324,11 +341,11 @@ select a.city,
            when h.total_records = 0 then '-'
            else concat(h.notnull_rate, '%') end     notnull_rate,
        i.total_records,
-       i.association_records,
+       i.notnull_records,
        case
            when i.total_records is null then null
            when i.total_records = 0 then '-'
-           else concat(i.association_rate, '%') end association_rate,
+           else concat(i.notnull_rate, '%') end     notnull_rate,
        j.total_records,
        j.association_records,
        case
@@ -341,23 +358,30 @@ select a.city,
            when k.total_records is null then null
            when k.total_records = 0 then '-'
            else concat(k.association_rate, '%') end association_rate,
-       l.non_empty_violations,
-       l.dict_violations,
-       case when l.non_empty_violations is null then null
-            when l.non_empty_violations = 0 then '-'
-            else concat(l.dict_rate,'%') end dict_rate
+       l.total_records,
+       l.association_records,
+       case
+           when l.total_records is null then null
+           when l.total_records = 0 then '-'
+           else concat(l.association_rate, '%') end association_rate,
+       m.non_empty_violations,
+       m.dict_violations,
+       case when m.non_empty_violations is null then null
+            when m.non_empty_violations = 0 then '-'
+            else concat(m.dict_rate,'%') end dict_rate
 from org_list a
          left join qzrj_realtime_org b on b.org_code = a.org_code and b.table_type = '实时表'
          left join qzrj_realtime_org c on c.org_code = a.org_code and c.table_type = '2小时内'
          left join qzrj_realtime_org d on d.org_code = a.org_code and d.table_type = 'T+0内'
          left join qzrj_column_level_org e on e.org_code = a.org_code and e.column_level = '1'
          left join qzrj_column_level_org f on f.org_code = a.org_code and f.column_level = '2'
-         left join qzrj_column_level_org g on g.org_code = a.org_code and g.column_level = 'update_1'
-         left join qzrj_column_level_org h on h.org_code = a.org_code and h.column_level = 'update_3'
-         left join qzrj_association_org i on i.org_code = a.org_code and i.association_table = 'emr_patient_info'
-         left join qzrj_association_org j on j.org_code = a.org_code and j.association_table = 'emr_activity_info'
-         left join qzrj_association_org k on k.org_code = a.org_code and k.association_table = 'all'
-         left join qzrj_dict_org l on l.org_code = a.org_code
+         left join qzrj_column_level_org g on g.org_code = a.org_code and g.column_level = '3'
+         left join qzrj_column_level_org h on h.org_code = a.org_code and h.column_level = 'update_1'
+         left join qzrj_column_level_org i on i.org_code = a.org_code and i.column_level = 'update_3'
+         left join qzrj_association_org j on j.org_code = a.org_code and j.association_table = 'emr_patient_info'
+         left join qzrj_association_org k on k.org_code = a.org_code and k.association_table = 'emr_activity_info'
+         left join qzrj_association_org l on l.org_code = a.org_code and l.association_table = 'all'
+         left join qzrj_dict_org m on m.org_code = a.org_code
 where a.is_516_flag = '是'
 order by a.city, a.org_code;
 
@@ -383,12 +407,16 @@ select city,
        h_notnull_records,
        concat(round((h_notnull_records / h_total_records) * 100, 2), '%') as h_notnull_rate,
        association_org_cnt,
+       i_total_records,
+       i_notnull_records,
+       concat(round((i_notnull_records / i_total_records) * 100, 2), '%') as i_notnull_rate,
+       association_org_cnt,
        concat(round((association_org_cnt / org_cnt) * 100, 2), '%')       as association__rate,
        dict_org_cnt,
        concat(round((dict_org_cnt / org_cnt) * 100, 2), '%')              as dict_rate
 from qzrj_city_summary a
 union
-select ':合计:'                                                                          city,
+select 'Total'                                                                          city,
        sum(org_cnt),
        sum(real_cnt),
        concat(round((sum(real_cnt) / sum(org_cnt)) * 100, 2), '%')                  as real_rate,
@@ -408,6 +436,9 @@ select ':合计:'                                                               
        sum(h_total_records)                                                            h_total_records,
        sum(h_notnull_records)                                                          h_notnull_records,
        concat(round((sum(h_notnull_records) / sum(h_total_records)) * 100, 2), '%') as h_notnull_rate,
+       sum(i_total_records)                                                            i_total_records,
+       sum(i_notnull_records)                                                          i_notnull_records,
+       concat(round((sum(i_notnull_records) / sum(i_total_records)) * 100, 2), '%') as i_notnull_rate,
        sum(association_org_cnt)                                                        association_org_cnt,
        concat(round((sum(association_org_cnt) / sum(org_cnt)) * 100, 2), '%')       as association__rate,
        sum(dict_org_cnt)                                                               dict_org_cnt,

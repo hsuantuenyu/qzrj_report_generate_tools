@@ -552,7 +552,8 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
                     '机构汇总': self.get_org_summary_sql(),
                     '时效性明细': self.get_realtime_detail_sql(),
                     '必填字段完整性': self.get_column_level1_sql(),
-                    '关键建议填字段完整性': self.get_column_level2_sql(),
+                    '重要建议填字段完整性': self.get_column_level2_sql(),
+                    '条件必填字段完整性': self.get_column_level3_sql(),
                     '关联关系明细': self.get_association_sql(),
                     '值域一致性': self.get_dict_sql(),
                     '主诉明细': self.get_chief_sql(),
@@ -667,7 +668,9 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
                             ws.column_dimensions['A'].width = 12  # 地市
                             # 遍历其他列，根据第 3 行的表头设置列宽
                             for col_idx in range(2, ws.max_column + 1):
-                                col_letter = ws.cell(row=1, column=col_idx).column_letter
+                                # 使用列索引直接获取列字母，避免合并单元格问题
+                                from openpyxl.utils import get_column_letter
+                                col_letter = get_column_letter(col_idx)
                                 header_value = ws.cell(row=3, column=col_idx).value
                                 
                                 if header_value:
@@ -685,7 +688,9 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
                         try:
                             # 遍历所有列
                             for col_idx in range(1, ws.max_column + 1):
-                                col_letter = ws.cell(row=1, column=col_idx).column_letter
+                                # 使用列索引直接获取列字母，避免合并单元格问题
+                                from openpyxl.utils import get_column_letter
+                                col_letter = get_column_letter(col_idx)
                                 header_value = ws.cell(row=3, column=col_idx).value
                                 
                                 # 根据列名设置列宽
@@ -841,6 +846,9 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
        h_total_records,
        h_notnull_records,
        concat(round((h_notnull_records / h_total_records) * 100, 2), '%') as h_notnull_rate,
+       i_total_records,
+       i_notnull_records,
+       concat(round((i_notnull_records / i_total_records) * 100, 2), '%') as i_notnull_rate,
        association_org_cnt,
        concat(round((association_org_cnt / org_cnt) * 100, 2), '%')       as association__rate,
        dict_org_cnt,
@@ -867,6 +875,9 @@ select 'Total'                                                                  
        sum(h_total_records) h_total_records,
        sum(h_notnull_records) h_notnull_records,
        concat(round((sum(h_notnull_records) / sum(h_total_records)) * 100, 2), '%') as h_notnull_rate,
+       sum(i_total_records)                                                            i_total_records,
+       sum(i_notnull_records)                                                          i_notnull_records,
+       concat(round((sum(i_notnull_records) / sum(i_total_records)) * 100, 2), '%') as i_not_notnull_rate,
        sum(association_org_cnt)                                                        association_org_cnt,
        concat(round((sum(association_org_cnt) / sum(org_cnt)) * 100, 2), '%')       as association__rate,
        sum(dict_org_cnt)                                                               dict_org_cnt,
@@ -928,11 +939,11 @@ order by city
            when h.total_records = 0 then '-'
            else concat(h.notnull_rate, '%') end     notnull_rate,
        i.total_records,
-       i.association_records,
+       i.notnull_records,
        case
            when i.total_records is null then null
            when i.total_records = 0 then '-'
-           else concat(i.association_rate, '%') end association_rate,
+           else concat(I.notnull_rate, '%') end     notnull_rate,
        j.total_records,
        j.association_records,
        case
@@ -945,23 +956,30 @@ order by city
            when k.total_records is null then null
            when k.total_records = 0 then '-'
            else concat(k.association_rate, '%') end association_rate,
-       l.non_empty_violations,
-       l.dict_violations,
-       case when l.non_empty_violations is null then null
-            when l.non_empty_violations = 0 then '-'
-            else concat(l.dict_rate,'%') end dict_rate
+       l.total_records,
+       l.association_records,
+       case
+           when l.total_records is null then null
+           when l.total_records = 0 then '-'
+           else concat(l.association_rate, '%') end association_rate,
+       m.non_empty_violations,
+       m.dict_violations,
+       case when m.non_empty_violations is null then null
+            when m.non_empty_violations = 0 then '-'
+            else concat(m.dict_rate,'%') end dict_rate
 from org_list a
          left join qzrj_realtime_org b on b.org_code = a.org_code and b.table_type = '实时表'
          left join qzrj_realtime_org c on c.org_code = a.org_code and c.table_type = '2小时内'
          left join qzrj_realtime_org d on d.org_code = a.org_code and d.table_type = 'T+0内'
          left join qzrj_column_level_org e on e.org_code = a.org_code and e.column_level = '1'
          left join qzrj_column_level_org f on f.org_code = a.org_code and f.column_level = '2'
-         left join qzrj_column_level_org g on g.org_code = a.org_code and g.column_level = 'update_1'
-         left join qzrj_column_level_org h on h.org_code = a.org_code and h.column_level = 'update_3'
-         left join qzrj_association_org i on i.org_code = a.org_code and i.association_table = 'emr_patient_info'
-         left join qzrj_association_org j on j.org_code = a.org_code and j.association_table = 'emr_activity_info'
-         left join qzrj_association_org k on k.org_code = a.org_code and k.association_table = 'all'
-         left join qzrj_dict_org l on l.org_code = a.org_code
+         left join qzrj_column_level_org g on g.org_code = a.org_code and g.column_level = '3'
+         left join qzrj_column_level_org h on h.org_code = a.org_code and h.column_level = 'update_1'
+         left join qzrj_column_level_org i on i.org_code = a.org_code and i.column_level = 'update_3'
+         left join qzrj_association_org j on j.org_code = a.org_code and j.association_table = 'emr_patient_info'
+         left join qzrj_association_org k on k.org_code = a.org_code and k.association_table = 'emr_activity_info'
+         left join qzrj_association_org l on l.org_code = a.org_code and l.association_table = 'all'
+         left join qzrj_dict_org m on m.org_code = a.org_code
 where a.is_516_flag = '是'
 order by a.city, a.org_code
         """
@@ -1042,6 +1060,29 @@ from org_list a
 where a.is_516_flag = '是'
 order by a.city, a.org_code
         """
+    def get_column_level3_sql(self):
+        """
+        条件必填字段完整性
+        注意：此 SQL 新增于2026-05-28
+        """
+        return """
+        select a.city,
+       a.org_code,
+       a.org_name,
+       b.table_name,
+       b.table_comment,
+       b.total_records,
+       b.notnull_records,
+       case
+           when total_records is null then null
+           when total_records = 0 then '-'
+           else
+               concat(b.notnull_rate, '%') end notnull_rate
+from org_list a
+         left join qzrj_column_level_3_detail b on a.org_code = b.org_code
+where a.is_516_flag = '是'
+order by a.city, a.org_code
+        """    
         
     def get_association_sql(self):
         """

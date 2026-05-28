@@ -1,6 +1,7 @@
-/**********************************
-*描述：值域映射
-**********************************/
+/****************************************************************
+*描述：值域一致性查询结果统计，导出Excel模板：qzrj_dict_detail.xlsx
+*修改日期范围：
+*****************************************************************/
 WITH tmp_table_field_info AS (
 select 'emr_patient_info' table_name,'患者基本信息表' table_comment,'id_card_type_code' field_name,'身份证件类别代码' field_comment,1 field_seq from cdc_emr_quality_check_dict limit 1 union all
 select 'emr_patient_info' table_name,'患者基本信息表' table_comment,'gender_code' field_name,'性别代码' field_comment,2 field_seq from cdc_emr_quality_check_dict limit 1 union all
@@ -73,7 +74,6 @@ select 'base_user' table_name,'医院信息系统用户信息' table_comment,'us
 ),
 tmp_org_list as 
 (select distinct city,org_code,org_name from cdc_mdm_org_code where is_516='是')
-
 SELECT
   a.city,
   a.org_code,
@@ -95,9 +95,8 @@ where
  c.table_name = b.table_name
  and c.field_name = b.field_name
  and a.org_code = b.org_id
-  and FROM_UNIXTIME(b.check_time / 1000) >= '2026-04-13 00:00:00'
-  and FROM_UNIXTIME(b.check_time / 1000) <= '2026-04-13 00:00:00'
+  and FROM_UNIXTIME(b.check_time / 1000) >= '2026-05-25 00:00:00'
+  and FROM_UNIXTIME(b.check_time / 1000) < '2026-05-26 00:00:00'
   group by a.city, a.org_code, a.org_name, b.table_name, c.table_comment, b.field_name, c.field_comment ,c.field_seq
   order by  a.city, a.org_code,b.table_name,c.field_seq
-limit
-  50000
+limit 150000;
