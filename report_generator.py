@@ -19,8 +19,8 @@ class ReportGeneratorTool:
         self.root.title("前置软件报告生成辅助工具")
         
         # 设置窗口大小并居中
-        window_width = 620
-        window_height = 460
+        window_width = 680
+        window_height = 560
         screen_width = root.winfo_screenwidth()
         screen_height = root.winfo_screenheight()
         x = (screen_width - window_width) // 2
@@ -35,6 +35,12 @@ class ReportGeneratorTool:
         self.data_dir = None
         self.quality_date = tk.StringVar()
         self.quality_date.set("")  # 初始化为空
+        self.data_imported = False  # 是否已导入数据
+
+        # 统一设置滚动条样式：宽度32像素，箭头按钮24像素
+        style = ttk.Style()
+        style.configure("Vertical.TScrollbar", width=32, arrowsize=24)
+        style.configure("Horizontal.TScrollbar", width=32, arrowsize=24)
         
         self.create_main_interface()
         
@@ -55,17 +61,20 @@ class ReportGeneratorTool:
         tab2 = ttk.Frame(notebook, padding="10")
         tab3 = ttk.Frame(notebook, padding="10")
         tab4 = ttk.Frame(notebook, padding="10")
+        tab5 = ttk.Frame(notebook, padding="10")
         
         notebook.add(tab1, text="1. 数据库测试")
         notebook.add(tab2, text="2. 数据导入")
         notebook.add(tab3, text="3. 数据加工")
         notebook.add(tab4, text="4. 数据导出")
+        notebook.add(tab5, text="5. 机构管理")
         
         self.create_db_test_tab(tab1)
         self.create_data_import_tab(tab2)
         self.create_data_process_tab(tab3)
         self.create_data_export_tab(tab4)
-        
+        self.create_org_management_tab(tab5)
+
     def create_db_test_tab(self, parent):
         """创建数据库测试 Tab"""
         frame = ttk.LabelFrame(parent, text="DuckDB 数据库连接测试", padding="5")
@@ -301,6 +310,7 @@ class ReportGeneratorTool:
                 conn.commit()
                 conn.close()
                 
+                self.data_imported = True
                 self.import_status_label.config(text="导入状态：完成", foreground="green")
                 messagebox.showinfo("成功", f"成功导入 {total_files} 个数据表")
                 
@@ -1189,6 +1199,373 @@ from org_list a
 where a.is_516_flag = '是'
 order by a.city, a.org_code
         """
+
+    def create_org_management_tab(self, parent):
+        """创建机构管理 Tab"""
+        frame = ttk.LabelFrame(parent, text="机构管理", padding="5")
+        frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(0, weight=1)
+
+        # 查询区域
+        search_frame = ttk.Frame(frame)
+        search_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=2)
+        frame.columnconfigure(0, weight=1)
+
+        search_label = ttk.Label(search_frame, text="搜索：")
+        search_label.pack(side=tk.LEFT, padx=5)
+
+        self.org_search_var = tk.StringVar()
+        search_entry = ttk.Entry(search_frame, textvariable=self.org_search_var, width=50)
+        search_entry.pack(side=tk.LEFT, padx=5)
+
+        search_btn = ttk.Button(search_frame, text="查询", command=self.refresh_org_tree)
+        search_btn.pack(side=tk.LEFT, padx=5)
+
+        clear_btn = ttk.Button(search_frame, text="清空", command=self.clear_org_search)
+        clear_btn.pack(side=tk.LEFT, padx=5)
+
+        refresh_btn = ttk.Button(search_frame, text="刷新", command=self.refresh_org_tree)
+        refresh_btn.pack(side=tk.LEFT, padx=5)
+
+        # 操作按钮区域
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=1, column=0, pady=5)
+
+        add_btn = ttk.Button(btn_frame, text="新增机构", command=self.add_org)
+        add_btn.pack(side=tk.LEFT, padx=5)
+
+        edit_btn = ttk.Button(btn_frame, text="编辑机构", command=self.edit_org)
+        edit_btn.pack(side=tk.LEFT, padx=5)
+
+        delete_btn = ttk.Button(btn_frame, text="删除机构", command=self.delete_org)
+        delete_btn.pack(side=tk.LEFT, padx=5)
+
+        # Treeview 展示区域
+        tree_frame = ttk.Frame(frame)
+        tree_frame.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=2)
+        frame.rowconfigure(2, weight=1)
+        frame.columnconfigure(0, weight=1)
+
+        # 垂直滚动条
+        v_scrollbar = ttk.Scrollbar(tree_frame)
+        v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 水平滚动条
+        h_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL)
+        h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+
+        # 定义显示的列
+        self.org_tree = ttk.Treeview(tree_frame, columns=('city', 'org_code', 'org_name', 'is_516_flag', '是否哨点'),
+                                     show='headings', yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+
+        # 设置列标题和宽度
+        self.org_tree.heading('city', text='城市')
+        self.org_tree.heading('org_code', text='机构代码')
+        self.org_tree.heading('org_name', text='机构名称')
+        self.org_tree.heading('is_516_flag', text='是否516')
+        self.org_tree.heading('是否哨点', text='是否哨点')
+
+        self.org_tree.column('city', width=80)
+        self.org_tree.column('org_code', width=100)
+        self.org_tree.column('org_name', width=200)
+        self.org_tree.column('is_516_flag', width=80)
+        self.org_tree.column('是否哨点', width=80)
+
+        self.org_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        v_scrollbar.config(command=self.org_tree.yview)
+        h_scrollbar.config(command=self.org_tree.xview)
+
+        # 双击编辑
+        self.org_tree.bind('<Double-1>', lambda e: self.edit_org())
+
+        # 状态栏
+        self.org_status_label = ttk.Label(frame, text="机构管理：未加载")
+        self.org_status_label.grid(row=3, column=0, sticky=tk.W, pady=2)
+
+        # 初始加载数据
+        self.refresh_org_tree()
+
+    def clear_org_search(self):
+        """清空搜索条件并刷新列表"""
+        self.org_search_var.set('')
+        self.refresh_org_tree()
+
+    def refresh_org_tree(self):
+        """刷新机构列表"""
+        search_text = self.org_search_var.get().strip()
+
+        try:
+            conn = duckdb.connect(self.db_path)
+
+            if search_text:
+                sql = f"""
+                    SELECT city, org_code, org_name, is_516_flag, 是否哨点
+                    FROM org_list
+                    WHERE city LIKE '%{search_text}%' 
+                       OR org_code LIKE '%{search_text}%' 
+                       OR org_name LIKE '%{search_text}%'
+                       OR 是否哨点 LIKE '%{search_text}%'
+                    ORDER BY city, org_code
+                """
+            else:
+                sql = "SELECT city, org_code, org_name, is_516_flag, 是否哨点 FROM org_list ORDER BY city, org_code"
+
+            result = conn.execute(sql).fetchall()
+            conn.close()
+
+            # 清空现有数据
+            for item in self.org_tree.get_children():
+                self.org_tree.delete(item)
+
+            # 添加新数据（NULL 值显示为空字符串）
+            for row in result:
+                display_row = tuple('' if v is None else v for v in row)
+                self.org_tree.insert('', tk.END, values=display_row)
+
+            self.org_status_label.config(text=f"机构管理：共 {len(result)} 条记录", foreground="black")
+
+        except Exception as e:
+            self.org_status_label.config(text=f"机构管理：加载失败 - {str(e)}", foreground="red")
+            messagebox.showerror("错误", f"加载机构数据失败：\n{str(e)}")
+
+    def add_org(self):
+        """新增机构"""
+        self.show_org_edit_dialog()
+
+    def edit_org(self):
+        """编辑选中的机构"""
+        selected = self.org_tree.selection()
+        if not selected:
+            messagebox.showwarning("提示", "请先选中要编辑的机构")
+            return
+
+        item = selected[0]
+        values = self.org_tree.item(item, 'values')
+
+        # 获取完整数据
+        org_code = values[1]
+        try:
+            conn = duckdb.connect(self.db_path)
+            result = conn.execute(f"SELECT * FROM org_list WHERE org_code = '{org_code}'").fetchone()
+            conn.close()
+
+            if result:
+                self.show_org_edit_dialog(result)
+        except Exception as e:
+            messagebox.showerror("错误", f"获取机构数据失败：\n{str(e)}")
+
+    def show_org_edit_dialog(self, org_data=None):
+        """显示机构编辑弹窗"""
+        top = tk.Toplevel(self.root)
+        top.title("编辑机构" if org_data else "新增机构")
+        top.resizable(True, True)
+        top.attributes('-topmost', True)
+
+        # 计算居中位置
+        top.update_idletasks()
+        width = 480
+        height = 360
+        x = self.root.winfo_x() + (self.root.winfo_width() - width) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - height) // 2
+        top.geometry(f"{width}x{height}+{x}+{y}")
+
+        # 两行布局：内容区（可滚动）| 按钮
+        top.columnconfigure(0, weight=1)
+        top.rowconfigure(0, weight=1)
+        top.rowconfigure(1, weight=0)
+
+        # 获取列名
+        try:
+            conn = duckdb.connect(self.db_path)
+            columns = [col[1] for col in conn.execute("PRAGMA table_info('org_list')").fetchall()]
+            conn.close()
+        except Exception as e:
+            messagebox.showerror("错误", f"获取表结构失败：\n{str(e)}")
+            top.destroy()
+            return
+
+        # 第一行：表单内容区（限制高度，超出自动滚动）
+        content_frame = ttk.Frame(top)
+        content_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=10)
+        content_frame.columnconfigure(0, weight=1)
+
+        # 垂直滚动条
+        v_scrollbar = ttk.Scrollbar(content_frame)
+        v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Canvas + Frame 实现滚动
+        canvas = tk.Canvas(content_frame, yscrollcommand=v_scrollbar.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        scrollable_frame = ttk.Frame(canvas)
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        scrollable_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+
+        def on_canvas_configure(event):
+            canvas.itemconfig(scrollable_window, width=event.width)
+
+        canvas.bind('<Configure>', on_canvas_configure)
+        v_scrollbar.config(command=canvas.yview)
+
+        # 创建输入控件
+        entry_vars = {}
+        row_idx = 0
+
+        # 字段中文映射
+        FIELD_LABEL_MAP = {
+            'city': '地市(州)',
+            'org_code': '机构编码',
+            'org_name': '机构名称',
+            'is_516_flag': '是否516标志',
+            'station_hospital': '是否哨点医院',
+            'is_412名单': '是否412名单',
+        }
+        # 必填字段
+        REQUIRED_FIELDS = ['city', 'org_code', 'org_name', 'is_516_flag']
+        # 下拉选项字段
+        DROPDOWN_FIELDS = ['is_412名单', 'is_516_flag','是否哨点', '是否分院区', '是否基层', '是否26', '是否满足实时要求',
+                           '是否主院区']
+
+        for col_name in columns:
+            display_name = FIELD_LABEL_MAP.get(col_name, col_name)
+            is_required = col_name in REQUIRED_FIELDS
+            is_dropdown = col_name in DROPDOWN_FIELDS
+
+            # 必填项标签标红（tk.Label 才支持 fg 颜色设置）
+            if is_required:
+                label = tk.Label(scrollable_frame, text=f"{display_name}：", fg='red')
+            else:
+                label = ttk.Label(scrollable_frame, text=f"{display_name}：")
+            label.grid(row=row_idx, column=0, sticky=tk.W, padx=5, pady=2)
+
+            var = tk.StringVar()
+            if org_data and row_idx < len(org_data):
+                value = org_data[row_idx]
+                var.set(value if value is not None else '')
+            entry_vars[col_name] = var
+
+            if is_dropdown:
+                # 非必填的下拉框允许选择空值来清空
+                combo_values = ("是", "否") if is_required else ("", "是", "否")
+                entry = ttk.Combobox(scrollable_frame, textvariable=var, values=combo_values, state="readonly",
+                                     width=38)
+            else:
+                if col_name == 'org_code':
+                    vcmd = (top.register(lambda val: val == '' or val.isdigit()), '%P')
+                    entry = ttk.Entry(scrollable_frame, textvariable=var, width=40,
+                                      validate='key', validatecommand=vcmd)
+                else:
+                    entry = ttk.Entry(scrollable_frame, textvariable=var, width=40)
+            entry.grid(row=row_idx, column=1, sticky=(tk.W, tk.E), padx=5, pady=2)
+
+            row_idx += 1
+
+        scrollable_frame.columnconfigure(1, weight=1)
+
+        # 第二行：保存、取消按钮
+        btn_frame = ttk.Frame(top)
+        btn_frame.grid(row=1, column=0, pady=5)
+
+        def save():
+            try:
+                # 必填校验
+                for field in REQUIRED_FIELDS:
+                    if not entry_vars[field].get().strip():
+                        display_name = FIELD_LABEL_MAP.get(field, field)
+                        top.attributes('-topmost', False)
+                        messagebox.showwarning("提示", f"【{display_name}】为必填项，请输入内容", parent=top)
+                        top.attributes('-topmost', True)
+                        return
+
+                conn = duckdb.connect(self.db_path)
+
+                if org_data:
+                    # 获取原始的 org_code（用于 WHERE 条件）
+                    original_org_code = org_data[columns.index('org_code')] if 'org_code' in columns else None
+
+                    # 更新：使用原始 org_code 作为 WHERE 条件
+                    if original_org_code:
+                        set_clause = ", ".join([f"{col} = '{entry_vars[col].get()}'" for col in columns])
+                        sql = f"UPDATE org_list SET {set_clause} WHERE org_code = '{original_org_code}'"
+                    else:
+                        top.attributes('-topmost', False)
+                        messagebox.showerror("错误", "无法获取原始机构代码", parent=top)
+                        top.attributes('-topmost', True)
+                        conn.close()
+                        return
+                else:
+                    # 新增
+                    col_str = ", ".join(columns)
+                    val_str = ", ".join([f"'{entry_vars[col].get()}'" for col in columns])
+                    sql = f"INSERT INTO org_list ({col_str}) VALUES ({val_str})"
+
+                conn.execute(sql)
+                conn.commit()
+                conn.close()
+
+                top.attributes('-topmost', False)
+                messagebox.showinfo("成功", "机构数据保存成功", parent=top)
+                top.attributes('-topmost', True)
+                top.destroy()
+                self.refresh_org_tree()
+
+                # 提示重新数据加工
+                if hasattr(self, 'data_imported') and self.data_imported:
+                    messagebox.showwarning(
+                        "提示",
+                        "机构数据已修改，请重新执行数据加工操作。\n\n请切换到【3. 数据加工】选项卡，点击【执行数据加工SQL】按钮。"
+                    )
+
+            except Exception as e:
+                top.attributes('-topmost', False)
+                messagebox.showerror("错误", f"保存失败：\n{str(e)}", parent=top)
+                top.attributes('-topmost', True)
+
+        save_btn = ttk.Button(btn_frame, text="保存", command=save)
+        save_btn.pack(side=tk.LEFT, padx=10)
+
+        cancel_btn = ttk.Button(btn_frame, text="取消", command=top.destroy)
+        cancel_btn.pack(side=tk.LEFT, padx=10)
+
+        top.wait_window()
+
+    def delete_org(self):
+        """删除选中的机构"""
+        selected = self.org_tree.selection()
+        if not selected:
+            messagebox.showwarning("提示", "请先选中要删除的机构")
+            return
+
+        item = selected[0]
+        values = self.org_tree.item(item, 'values')
+        org_name = values[2]
+        org_code = values[1]
+
+        if messagebox.askyesno("确认删除", f"确定要删除机构【{org_name}】吗？"):
+            try:
+                conn = duckdb.connect(self.db_path)
+                conn.execute(f"DELETE FROM org_list WHERE org_code = '{org_code}'")
+                conn.commit()
+                conn.close()
+
+                self.refresh_org_tree()
+                messagebox.showinfo("成功", "机构删除成功")
+
+                # 提示重新数据加工
+                if hasattr(self, 'data_imported') and self.data_imported:
+                    messagebox.showwarning(
+                        "提示",
+                        "机构数据已修改，请重新执行数据加工操作。\n\n请切换到【3. 数据加工】选项卡，点击【执行数据加工SQL】按钮。"
+                    )
+
+            except Exception as e:
+                messagebox.showerror("错误", f"删除失败：\n{str(e)}")
 
 
 def main():
