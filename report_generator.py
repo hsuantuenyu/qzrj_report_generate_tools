@@ -16,7 +16,7 @@ warnings.filterwarnings('ignore', message='pandas only supports SQLAlchemy')
 class ReportGeneratorTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("前置软件报告生成辅助工具")
+        self.root.title("前置软件报告生成辅助工具 V1.4")
         
         # 设置窗口大小并居中
         window_width = 680
