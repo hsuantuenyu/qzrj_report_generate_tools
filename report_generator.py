@@ -33,8 +33,10 @@ class ReportGeneratorTool:
         self.template_path = None
         self.export_path = None
         self.data_dir = None
-        self.quality_date = tk.StringVar()
-        self.quality_date.set("")  # 初始化为空
+        self.start_date = tk.StringVar()
+        self.start_date.set("")  # 初始化为空
+        self.end_date = tk.StringVar()
+        self.end_date.set("")  # 初始化为空
         self.data_imported = False  # 是否已导入数据
 
         # 统一设置滚动条样式：宽度32像素，箭头按钮24像素
@@ -91,9 +93,22 @@ class ReportGeneratorTool:
         test_btn = ttk.Button(frame, text="测试数据库连接", command=self.test_database)
         test_btn.grid(row=2, column=0, pady=2)
         
-        self.db_info_text = tk.Text(frame, height=15, width=80)
-        self.db_info_text.grid(row=3, column=0, pady=2, sticky=(tk.W, tk.E, tk.N, tk.S))
+        # 创建带滚动条的文本框
+        text_frame = ttk.Frame(frame)
+        text_frame.grid(row=3, column=0, pady=2, sticky=(tk.W, tk.E, tk.N, tk.S))
         frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(3, weight=1)
+        
+        # 垂直滚动条
+        scrollbar = ttk.Scrollbar(text_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # 文本框
+        self.db_info_text = tk.Text(text_frame, wrap=tk.WORD, yscrollcommand=scrollbar.set, height=15, width=80)
+        self.db_info_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # 绑定滚动条
+        scrollbar.config(command=self.db_info_text.yview)
         
     def test_database(self):
         """测试数据库连接"""
@@ -132,23 +147,34 @@ class ReportGeneratorTool:
         date_frame = ttk.Frame(frame)
         date_frame.grid(row=0, column=0, sticky=tk.W, pady=2)
         
-        date_label = ttk.Label(date_frame, text="质控日期:", font=('微软雅黑', 10, 'bold'))
-        date_label.grid(row=0, column=0, padx=5)
-        
         # 设置初始日期为今天
         today = datetime.now().strftime('%Y-%m-%d')
-        self.quality_date.set(today)
+        self.start_date.set(today)
+        self.end_date.set(today)
         
-        # 日期显示框（只读）
-        date_entry = ttk.Entry(date_frame, textvariable=self.quality_date, width=15, font=('微软雅黑', 10), state='readonly')
-        date_entry.grid(row=0, column=1, padx=5)
+        # 开始日期
+        start_label = ttk.Label(date_frame, text="开始日期:", font=('微软雅黑', 10, 'bold'))
+        start_label.grid(row=0, column=0, padx=5)
         
-        # 日历选择按钮
-        calendar_btn = ttk.Button(date_frame, text="📅", width=3, command=lambda: self.popup_calendar())
-        calendar_btn.grid(row=0, column=2, padx=2)
+        start_date_entry = ttk.Entry(date_frame, textvariable=self.start_date, width=12, font=('微软雅黑', 10), state='readonly')
+        start_date_entry.grid(row=0, column=1, padx=5)
         
-        # 绑定鼠标点击事件，点击文本框也弹出日历
-        date_entry.bind('<Button-1>', lambda e: self.popup_calendar())
+        start_calendar_btn = ttk.Button(date_frame, text="📅", width=3, command=lambda: self.popup_calendar('start'))
+        start_calendar_btn.grid(row=0, column=2, padx=2)
+        
+        start_date_entry.bind('<Button-1>', lambda e: self.popup_calendar('start'))
+        
+        # 结束日期
+        end_label = ttk.Label(date_frame, text="结束日期:", font=('微软雅黑', 10, 'bold'))
+        end_label.grid(row=0, column=3, padx=5)
+        
+        end_date_entry = ttk.Entry(date_frame, textvariable=self.end_date, width=12, font=('微软雅黑', 10), state='readonly')
+        end_date_entry.grid(row=0, column=4, padx=5)
+        
+        end_calendar_btn = ttk.Button(date_frame, text="📅", width=3, command=lambda: self.popup_calendar('end'))
+        end_calendar_btn.grid(row=0, column=5, padx=2)
+        
+        end_date_entry.bind('<Button-1>', lambda e: self.popup_calendar('end'))
         
         select_btn = ttk.Button(frame, text="选择数据文件目录", command=self.select_data_directory)
         select_btn.grid(row=1, column=0, sticky=tk.W, pady=2)
@@ -169,13 +195,26 @@ class ReportGeneratorTool:
         
         self.import_progress = ttk.Progressbar(frame, mode='determinate')
         self.import_progress.grid(row=5, column=0, sticky=(tk.W, tk.E), pady=2)
-    
-        frame.columnconfigure(0, weight=1)
-        self.file_list_text = tk.Text(frame, height=10, width=80)
-        self.file_list_text.grid(row=6, column=0, pady=2, sticky=(tk.W, tk.E, tk.N, tk.S))
         frame.columnconfigure(0, weight=1)
         
-    def popup_calendar(self):
+        # 创建带滚动条的文本框
+        text_frame = ttk.Frame(frame)
+        text_frame.grid(row=6, column=0, pady=2, sticky=(tk.W, tk.E, tk.N, tk.S))
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(6, weight=1)
+        
+        # 垂直滚动条
+        scrollbar = ttk.Scrollbar(text_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # 文本框
+        self.file_list_text = tk.Text(text_frame, wrap=tk.WORD, yscrollcommand=scrollbar.set, height=10, width=80)
+        self.file_list_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # 绑定滚动条
+        scrollbar.config(command=self.file_list_text.yview)
+        
+    def popup_calendar(self, date_type='start'):
         """弹出日历选择窗口"""
         # 创建顶级窗口
         top = tk.Toplevel(self.root)
@@ -195,14 +234,17 @@ class ReportGeneratorTool:
         cal.pack(padx=10, pady=10)
         
         # 设置当前选中的日期
-        current_date = self.quality_date.get()
+        current_date = self.start_date.get() if date_type == 'start' else self.end_date.get()
         if current_date:
             cal.selection_set(current_date)
         
         # 确认选择函数
         def on_confirm():
             selected_date = cal.get_date()
-            self.quality_date.set(selected_date)
+            if date_type == 'start':
+                self.start_date.set(selected_date)
+            else:
+                self.end_date.set(selected_date)
             self.update_export_filename()
             top.destroy()
         
@@ -227,13 +269,14 @@ class ReportGeneratorTool:
     
     def update_export_filename(self):
         """更新导出文件名中的质控日期"""
-        date_str = self.quality_date.get()
-        if date_str and hasattr(self, 'export_name_var'):
-            # 获取当前文件名（不含日期部分）
-            current_name = self.export_name_var.get()
-            # 提取基础名称（去掉日期部分）
+        start_date_str = self.start_date.get()
+        end_date_str = self.end_date.get()
+        if start_date_str and hasattr(self, 'export_name_var'):
             base_name = "疾控中心数据质控报告_质控日期："
-            new_name = f"{base_name}{date_str}.xlsx"
+            if start_date_str == end_date_str:
+                new_name = f"{base_name}{start_date_str}.xlsx"
+            else:
+                new_name = f"{base_name}{start_date_str}至{end_date_str}.xlsx"
             self.export_name_var.set(new_name)
     
     def select_data_directory(self):
@@ -466,10 +509,14 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
         export_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=2)
         frame.columnconfigure(0, weight=1)
         
-        # 使用当前质控日期作为默认文件名
+        # 使用当前日期作为默认文件名（日期区间）
         default_date = datetime.now().strftime('%Y-%m-%d')
         default_name = f"疾控中心数据质控报告_质控日期：{default_date}.xlsx"
         self.export_name_var = tk.StringVar(value=default_name)
+        
+        # 初始化日期变量
+        self.start_date.set(default_date)
+        self.end_date.set(default_date)
         export_name_label = ttk.Label(export_frame, text="导出文件名:")
         export_name_label.grid(row=0, column=0, sticky=tk.W, pady=2)
         
