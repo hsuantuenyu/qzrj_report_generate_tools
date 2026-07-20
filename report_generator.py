@@ -16,7 +16,7 @@ warnings.filterwarnings('ignore', message='pandas only supports SQLAlchemy')
 class ReportGeneratorTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("前置软件报告生成辅助工具")
+        self.root.title("前置软件报告生成辅助工具 V1.4")
         
         # 设置窗口大小并居中
         window_width = 680
@@ -1219,6 +1219,9 @@ order by a.city, a.org_code
         search_entry = ttk.Entry(search_frame, textvariable=self.org_search_var, width=50)
         search_entry.pack(side=tk.LEFT, padx=5)
 
+        # 点击搜索框自动清空
+        search_entry.bind('<Button-1>', lambda e: self.org_search_var.set(''))
+
         search_btn = ttk.Button(search_frame, text="查询", command=self.refresh_org_tree)
         search_btn.pack(side=tk.LEFT, padx=5)
 
@@ -1460,6 +1463,14 @@ order by a.city, a.org_code
                     vcmd = (top.register(lambda val: val == '' or val.isdigit()), '%P')
                     entry = ttk.Entry(scrollable_frame, textvariable=var, width=40,
                                       validate='key', validatecommand=vcmd)
+                elif col_name == 'city':
+                    # 地市(州)下拉选项
+                    city_values = (
+                        "鄂州市", "恩施州", "黄冈市", "黄石市", "荆门市", "荆州市",
+                        "潜江市", "神农架林区", "省本级", "十堰市", "随州市", "天门市",
+                        "武汉市", "仙桃市", "咸宁市", "襄阳市", "孝感市", "宜昌市"
+                    )
+                    entry = ttk.Combobox(scrollable_frame, textvariable=var, values=city_values, width=38)
                 else:
                     entry = ttk.Entry(scrollable_frame, textvariable=var, width=40)
             entry.grid(row=row_idx, column=1, sticky=(tk.W, tk.E), padx=5, pady=2)
