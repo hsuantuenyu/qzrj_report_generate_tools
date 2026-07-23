@@ -38,7 +38,7 @@ VSVersionInfo(
         StringStruct(u'OriginalFilename', u'前置软件报告生成工具.exe'),
         StringStruct(u'ProductName', u'前置软件报告生成工具'),
         StringStruct(u'ProductVersion', u'1.5.0.0'),
-        StringStruct(u'SpecialBuild', u'2026-07-20')])
+        StringStruct(u'SpecialBuild', u'2026-07-23')])
       ]), 
     VarFileInfo([VarStruct(u'Translation', [2052, 1200])])
   ]
