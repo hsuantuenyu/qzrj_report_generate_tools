@@ -37,6 +37,7 @@ class ReportGeneratorTool:
         self.start_date.set("")  # 初始化为空
         self.end_date = tk.StringVar()
         self.end_date.set("")  # 初始化为空
+        self.date_range_mode = tk.StringVar(value="single")  # 默认单日
         self.data_imported = False  # 是否已导入数据
 
         # 统一设置滚动条样式：宽度32像素，箭头按钮24像素
@@ -142,40 +143,65 @@ class ReportGeneratorTool:
         frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         parent.columnconfigure(0, weight=1)
         parent.rowconfigure(0, weight=1)
-        
+
         # 创建日期选择框架
         date_frame = ttk.Frame(frame)
         date_frame.grid(row=0, column=0, sticky=tk.W, pady=2)
-        
+
+        # 数据区间选择
+        range_frame = ttk.Frame(date_frame)
+        range_frame.grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
+
+        range_label = ttk.Label(range_frame, text="数据区间:", font=('微软雅黑', 10, 'bold'))
+        range_label.pack(side=tk.LEFT, padx=5)
+
+        single_radio = ttk.Radiobutton(range_frame, text="单日", variable=self.date_range_mode, value="single")
+        single_radio.pack(side=tk.LEFT, padx=5)
+
+        range_radio = ttk.Radiobutton(range_frame, text="区间", variable=self.date_range_mode, value="range")
+        range_radio.pack(side=tk.LEFT, padx=5)
+
+        # 日期输入框架
+        input_frame = ttk.Frame(date_frame)
+        input_frame.grid(row=1, column=0, sticky=tk.W)
+
         # 设置初始日期为今天
         today = datetime.now().strftime('%Y-%m-%d')
         self.start_date.set(today)
         self.end_date.set(today)
-        
+
         # 开始日期
-        start_label = ttk.Label(date_frame, text="开始日期:", font=('微软雅黑', 10, 'bold'))
+        start_label = ttk.Label(input_frame, text="开始日期:", font=('微软雅黑', 10, 'bold'))
         start_label.grid(row=0, column=0, padx=5)
-        
-        start_date_entry = ttk.Entry(date_frame, textvariable=self.start_date, width=12, font=('微软雅黑', 10), state='readonly')
+
+        start_date_entry = ttk.Entry(input_frame, textvariable=self.start_date, width=12, font=('微软雅黑', 10), state='readonly')
         start_date_entry.grid(row=0, column=1, padx=5)
-        
-        start_calendar_btn = ttk.Button(date_frame, text="📅", width=3, command=lambda: self.popup_calendar('start'))
+
+        start_calendar_btn = ttk.Button(input_frame, text="📅", width=3, command=lambda: self.popup_calendar('start'))
         start_calendar_btn.grid(row=0, column=2, padx=2)
-        
+
         start_date_entry.bind('<Button-1>', lambda e: self.popup_calendar('start'))
-        
-        # 结束日期
-        end_label = ttk.Label(date_frame, text="结束日期:", font=('微软雅黑', 10, 'bold'))
-        end_label.grid(row=0, column=3, padx=5)
-        
-        end_date_entry = ttk.Entry(date_frame, textvariable=self.end_date, width=12, font=('微软雅黑', 10), state='readonly')
-        end_date_entry.grid(row=0, column=4, padx=5)
-        
-        end_calendar_btn = ttk.Button(date_frame, text="📅", width=3, command=lambda: self.popup_calendar('end'))
-        end_calendar_btn.grid(row=0, column=5, padx=2)
-        
+
+        # 结束日期（放在独立frame中以便显示/隐藏）
+        self.end_date_frame = ttk.Frame(input_frame)
+        self.end_date_frame.grid(row=0, column=3, padx=5)
+
+        end_label = ttk.Label(self.end_date_frame, text="结束日期:", font=('微软雅黑', 10, 'bold'))
+        end_label.pack(side=tk.LEFT, padx=5)
+
+        end_date_entry = ttk.Entry(self.end_date_frame, textvariable=self.end_date, width=12, font=('微软雅黑', 10), state='readonly')
+        end_date_entry.pack(side=tk.LEFT, padx=5)
+
+        end_calendar_btn = ttk.Button(self.end_date_frame, text="📅", width=3, command=lambda: self.popup_calendar('end'))
+        end_calendar_btn.pack(side=tk.LEFT, padx=2)
+
         end_date_entry.bind('<Button-1>', lambda e: self.popup_calendar('end'))
-        
+
+        # 绑定日期区间模式变化
+        self.date_range_mode.trace_add('write', self.on_date_range_change)
+        # 初始状态
+        self.on_date_range_change()
+
         select_btn = ttk.Button(frame, text="选择数据文件目录", command=self.select_data_directory)
         select_btn.grid(row=1, column=0, sticky=tk.W, pady=2)
         
@@ -214,6 +240,16 @@ class ReportGeneratorTool:
         # 绑定滚动条
         scrollbar.config(command=self.file_list_text.yview)
         
+    def on_date_range_change(self, *args):
+        """切换日期区间模式时的回调：控制结束日期的显示/隐藏"""
+        if not hasattr(self, 'end_date_frame'):
+            return
+        if self.date_range_mode.get() == "single":
+            self.end_date_frame.grid_remove()
+        else:
+            self.end_date_frame.grid()
+        self.update_export_filename()
+
     def popup_calendar(self, date_type='start'):
         """弹出日历选择窗口"""
         # 创建顶级窗口
@@ -273,7 +309,7 @@ class ReportGeneratorTool:
         end_date_str = self.end_date.get()
         if start_date_str and hasattr(self, 'export_name_var'):
             base_name = "疾控中心数据质控报告_质控日期："
-            if start_date_str == end_date_str:
+            if self.date_range_mode.get() == "single" or start_date_str == end_date_str:
                 new_name = f"{base_name}{start_date_str}.xlsx"
             else:
                 new_name = f"{base_name}{start_date_str}至{end_date_str}.xlsx"
