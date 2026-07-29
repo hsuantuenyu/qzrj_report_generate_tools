@@ -13,10 +13,13 @@ from tkcalendar import Calendar
 warnings.filterwarnings('ignore', message='pandas only supports SQLAlchemy')
 
 
+VERSION = "V1.5"
+BUILD_DATE = "2026-07-23"
+
 class ReportGeneratorTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("前置软件报告生成辅助工具 V1.5")
+        self.root.title(f"前置软件报告生成辅助工具 {VERSION} ({BUILD_DATE})")
         
         # 设置窗口大小并居中
         window_width = 680
@@ -47,8 +50,69 @@ class ReportGeneratorTool:
         
         self.create_main_interface()
         
+    def show_version_log(self):
+        """显示版本日志弹窗"""
+        top = tk.Toplevel(self.root)
+        top.title("版本日志")
+        top.geometry("550x450")
+        top.resizable(False, False)
+        top.attributes('-topmost', True)
+        top.transient(self.root)
+
+        # 居中显示
+        top.update_idletasks()
+        width = 550
+        height = 450
+        x = self.root.winfo_x() + (self.root.winfo_width() - width) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - height) // 2
+        top.geometry(f"{width}x{height}+{x}+{y}")
+
+        # 标题
+        title_label = ttk.Label(top, text="版本更新日志", font=('微软雅黑', 14, 'bold'))
+        title_label.pack(pady=(15, 10))
+
+        # 带滚动条的文本框
+        text_frame = ttk.Frame(top)
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=5)
+
+        scrollbar = ttk.Scrollbar(text_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        text_widget = tk.Text(text_frame, wrap=tk.WORD, yscrollcommand=scrollbar.set, font=('微软雅黑', 10))
+        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=text_widget.yview)
+
+        # 读取版本日志文件
+        log_file = '版本日志.txt'
+        try:
+            if os.path.exists(log_file):
+                with open(log_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                text_widget.insert(tk.END, content)
+            else:
+                text_widget.insert(tk.END, f"未找到版本日志文件：{log_file}")
+        except Exception as e:
+            text_widget.insert(tk.END, f"读取版本日志失败：{str(e)}")
+
+        text_widget.config(state=tk.DISABLED)
+
+        # 关闭按钮
+        btn_frame = ttk.Frame(top)
+        btn_frame.pack(pady=(5, 15))
+        close_btn = ttk.Button(btn_frame, text="关闭", command=top.destroy)
+        close_btn.pack()
+
+        top.wait_window()
+
     def create_main_interface(self):
         """创建主界面"""
+        # 创建菜单栏
+        menubar = tk.Menu(self.root)
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="版本日志", command=self.show_version_log)
+        menubar.add_cascade(label="帮助", menu=help_menu)
+        self.root.config(menu=menubar)
+
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
