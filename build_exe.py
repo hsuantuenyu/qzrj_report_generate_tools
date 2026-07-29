@@ -50,6 +50,7 @@ def copy_extra_files():
         "qzrj_quality_report.db",
         "0.前置软件质控结果统计_doris查询语句",
         "1.doris查询结果模板",
+        "版本日志.txt"
     ]
 
     print("[4/4] 复制额外文件到 dist...")

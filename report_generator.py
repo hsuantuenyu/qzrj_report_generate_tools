@@ -1413,11 +1413,15 @@ order by a.city, a.org_code
         self.org_tree.heading('is_516_flag', text='是否516')
         self.org_tree.heading('是否哨点', text='是否哨点')
 
-        self.org_tree.column('city', width=80)
-        self.org_tree.column('org_code', width=100)
-        self.org_tree.column('org_name', width=200)
-        self.org_tree.column('is_516_flag', width=80)
-        self.org_tree.column('是否哨点', width=80)
+        self.org_tree.column('city', width=80, anchor='center')
+        self.org_tree.column('org_code', width=100, anchor='center')
+        self.org_tree.column('org_name', width=200, anchor='center')
+        self.org_tree.column('is_516_flag', width=80, anchor='center')
+        self.org_tree.column('是否哨点', width=80, anchor='center')
+
+        # 隔行变色配置
+        self.org_tree.tag_configure('evenrow', background='#E8F4F8')
+        self.org_tree.tag_configure('oddrow', background='#FFFFFF')
 
         self.org_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -1466,10 +1470,11 @@ order by a.city, a.org_code
             for item in self.org_tree.get_children():
                 self.org_tree.delete(item)
 
-            # 添加新数据（NULL 值显示为空字符串）
-            for row in result:
+            # 添加新数据（NULL 值显示为空字符串），隔行变色
+            for idx, row in enumerate(result):
                 display_row = tuple('' if v is None else v for v in row)
-                self.org_tree.insert('', tk.END, values=display_row)
+                tag = 'evenrow' if idx % 2 == 0 else 'oddrow'
+                self.org_tree.insert('', tk.END, values=display_row, tags=(tag,))
 
             self.org_status_label.config(text=f"机构管理：共 {len(result)} 条记录", foreground="black")
 
