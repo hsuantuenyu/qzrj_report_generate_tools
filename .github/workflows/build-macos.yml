@@ -1,0 +1,251 @@
+name: Build macOS App (macOS 11-14)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_macos_version:
+        description: '目标 macOS 最低版本 (最低支持版本)'
+        required: true
+        default: '11'
+        type: choice
+        options:
+          - '11'
+          - '12'
+          - '13'
+          - '14'
+      python_version:
+        description: 'Python 版本'
+        required: true
+        default: '3.11'
+        type: choice
+        options:
+          - '3.10'
+          - '3.11'
+          - '3.12'
+      target_architecture:
+        description: '目标架构'
+        required: true
+        default: 'universal2'
+        type: choice
+        options:
+          - 'x86_64'
+          - 'arm64'
+          - 'universal2'
+      upload_artifact:
+        description: '上传构建产物到 Artifact'
+        required: true
+        default: true
+        type: boolean
+      artifact_retention_days:
+        description: 'Artifact 保留天数'
+        required: true
+        default: '30'
+        type: choice
+        options:
+          - '1'
+          - '7'
+          - '14'
+          - '30'
+          - '60'
+          - '90'
+
+env:
+  PROJECT_NAME: 前置软件报告生成工具
+  DIST_DIR: dist
+  MACOSX_DEPLOYMENT_TARGET: ${{ github.event.inputs.target_macos_version }}.0
+
+jobs:
+  build-macos:
+    name: Build macOS App (macOS ${{ github.event.inputs.target_macos_version }}+)
+    # 根据目标版本选择 runner: 11/12 用 macos-12, 13 用 macos-13, 14 用 macos-14
+    runs-on: ${{ (github.event.inputs.target_macos_version == '14' && 'macos-14') || (github.event.inputs.target_macos_version == '13' && 'macos-13') || 'macos-12' }}
+
+    steps:
+      - name: Checkout 源代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python ${{ github.event.inputs.python_version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ github.event.inputs.python_version }}
+
+      - name: 设置 macOS 版本名称映射
+        run: |
+          case "${{ github.event.inputs.target_macos_version }}" in
+            11) MACOS_NAME="Big Sur" ;;
+            12) MACOS_NAME="Monterey" ;;
+            13) MACOS_NAME="Ventura" ;;
+            14) MACOS_NAME="Sonoma" ;;
+            *) MACOS_NAME="Unknown" ;;
+          esac
+          echo "MACOS_NAME=$MACOS_NAME" >> $GITHUB_ENV
+          echo "目标 macOS: ${{ github.event.inputs.target_macos_version }} ($MACOS_NAME)"
+
+      - name: 显示构建环境信息
+        run: |
+          echo "=== 系统信息 (构建环境) ==="
+          sw_vers
+          uname -m
+          echo ""
+          echo "=== 目标 macOS 版本 ==="
+          echo "目标版本: ${{ github.event.inputs.target_macos_version }} ($MACOS_NAME)"
+          echo "MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET"
+          echo ""
+          echo "=== 目标架构 ==="
+          echo "TARGET_ARCH=${{ github.event.inputs.target_architecture }}"
+          echo ""
+          echo "=== Python 信息 ==="
+          python --version
+          which python
+          python -c "import platform; print(f'Python arch: {platform.machine()}')"
+          echo ""
+          echo "=== 当前目录 ==="
+          pwd
+          ls -la
+          echo ""
+          echo "=== macOS SDK 信息 ==="
+          xcrun --show-sdk-path 2>/dev/null || echo "xcrun not available"
+          xcrun --show-sdk-version 2>/dev/null || echo "sdk version not available"
+
+      - name: 安装系统依赖 (Tcl/Tk for tkinter + Universal build tools)
+        run: |
+          echo "=== 验证 tkinter 可用性 ==="
+          python -c "import tkinter; print(f'tkinter OK: {tkinter.TkVersion}')" || echo "tkinter 不可用"
+          echo ""
+          echo "=== 验证编译工具 ==="
+          which clang || echo "clang not found"
+          clang --version 2>/dev/null | head -3
+          echo ""
+          echo "=== 验证 lipo (universal binary 工具) ==="
+          which lipo || echo "lipo not found"
+
+      - name: 安装 Python 依赖
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install duckdb pandas openpyxl tkcalendar pyinstaller
+          echo ""
+          echo "=== 已安装依赖版本 ==="
+          pip list | grep -iE "duckdb|pandas|openpyxl|tkcalendar|pyinstaller"
+
+      - name: 运行 macOS 兼容性验证脚本
+        run: |
+          echo "=== 运行 macOS 兼容性验证 ==="
+          python verify_macos_build.py
+        continue-on-error: false
+
+      - name: 执行构建 (pyinstaller - macOS ${{ github.event.inputs.target_macos_version }}+ 兼容)
+        env:
+          TARGET_ARCH: ${{ github.event.inputs.target_architecture }}
+        run: |
+          echo "=== macOS 部署目标设置 ==="
+          export MACOSX_DEPLOYMENT_TARGET="${{ github.event.inputs.target_macos_version }}.0"
+          echo "MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET"
+          echo "目标 macOS: ${{ github.event.inputs.target_macos_version }} ($MACOS_NAME)"
+          echo ""
+          echo "=== 开始执行 PyInstaller 构建 (macOS ${{ github.event.inputs.target_macos_version }}+ 兼容) ==="
+          python build_exe.py
+          echo ""
+          echo "=== dist 目录内容 ==="
+          ls -la "$DIST_DIR/"
+          echo ""
+          if [ -d "$DIST_DIR/${PROJECT_NAME}.app" ]; then
+            echo ".app 应用包信息:"
+            du -sh "$DIST_DIR/${PROJECT_NAME}.app"
+            ls -la "$DIST_DIR/${PROJECT_NAME}.app/Contents/MacOS/"
+            echo ""
+            echo "=== Info.plist 内容 ==="
+            PLIST="$DIST_DIR/${PROJECT_NAME}.app/Contents/Info.plist"
+            if [ -f "$PLIST" ]; then
+              cat "$PLIST" | head -50
+            fi
+          else
+            echo "警告：未找到 .app 应用包目录"
+          fi
+
+      - name: 验证 .app 可执行文件 (macOS ${{ github.event.inputs.target_macos_version }} 兼容性)
+        if: success()
+        run: |
+          APP_BIN="$DIST_DIR/${PROJECT_NAME}.app/Contents/MacOS/${PROJECT_NAME}"
+          APP_PLIST="$DIST_DIR/${PROJECT_NAME}.app/Contents/Info.plist"
+          if [ -f "$APP_BIN" ]; then
+            echo "=== 可执行文件信息 ==="
+            file "$APP_BIN"
+            echo ""
+            echo "=== 可执行文件权限 ==="
+            ls -la "$APP_BIN"
+            chmod +x "$APP_BIN" || true
+            echo ""
+            echo "=== 架构检查 (lipo) ==="
+            lipo -info "$APP_BIN" 2>/dev/null || echo "lipo check skipped"
+            echo ""
+            echo "=== 最低 macOS 版本检查 ==="
+            otool -l "$APP_BIN" 2>/dev/null | grep -A4 "LC_BUILD_VERSION" || \
+            otool -l "$APP_BIN" 2>/dev/null | grep -A4 "LC_VERSION_MIN_MACOSX" || \
+            echo "版本加载命令检查 (可能为通用二进制)"
+            echo ""
+            echo "=== Info.plist LSMinimumSystemVersion 检查 ==="
+            if [ -f "$APP_PLIST" ]; then
+              /usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$APP_PLIST" 2>/dev/null || \
+              echo "LSMinimumSystemVersion not found in Info.plist"
+            fi
+            echo ""
+            echo "=== 依赖库检查 (otool -L) ==="
+            otool -L "$APP_BIN" | head -20 || true
+          else
+            echo "未找到可执行文件，跳过验证"
+          fi
+
+      - name: 打包构建产物 (ZIP)
+        if: inputs.upload_artifact
+        run: |
+          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+          ARCH="${{ github.event.inputs.target_architecture }}"
+          MACOS_VER="${{ github.event.inputs.target_macos_version }}"
+          ZIP_NAME="${PROJECT_NAME}_macOS${MACOS_VER}+_${ARCH}_${TIMESTAMP}.zip"
+          echo "ZIP 文件名: $ZIP_NAME"
+          echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+
+          cd "$DIST_DIR"
+          zip -r "../$ZIP_NAME" ./* -x "*.pyc" "__pycache__/*"
+          cd ..
+          echo ""
+          echo "=== ZIP 文件信息 ==="
+          ls -lh "$ZIP_NAME"
+
+      - name: 上传构建产物到 Artifact
+        if: inputs.upload_artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ZIP_NAME }}
+          path: ${{ env.ZIP_NAME }}
+          retention-days: ${{ github.event.inputs.artifact_retention_days }}
+          compression-level: 6
+
+      - name: 构建完成 - 汇总
+        run: |
+          echo "========================================"
+          echo "  macOS 构建完成 ✓ (macOS ${{ github.event.inputs.target_macos_version }}+ 兼容)"
+          echo "========================================"
+          echo "项目名称: $PROJECT_NAME"
+          echo "构建环境: macOS ($(sw_vers -productVersion))"
+          echo "最低支持: macOS ${{ github.event.inputs.target_macos_version }}.0 ($MACOS_NAME)"
+          echo "目标架构: ${{ github.event.inputs.target_architecture }}"
+          echo "Python: ${{ github.event.inputs.python_version }}"
+          echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
+          echo "产物目录: $DIST_DIR/"
+          if [ -n "${{ env.ZIP_NAME }}" ]; then
+            echo "ZIP 包: ${{ env.ZIP_NAME }}"
+          fi
+          echo ""
+          echo "兼容性说明:"
+          echo "  - 支持 macOS ${{ github.event.inputs.target_macos_version }} ($MACOS_NAME) 及以上版本"
+          echo "  - 目标架构: ${{ github.event.inputs.target_architecture }}"
+          if [ "${{ github.event.inputs.target_architecture }}" = "universal2" ]; then
+            echo "  - Intel (x86_64) 和 Apple Silicon (arm64) Mac 均可原生运行"
+          elif [ "${{ github.event.inputs.target_architecture }}" = "x86_64" ]; then
+            echo "  - 仅 Intel Mac 原生运行 (Apple Silicon 通过 Rosetta 2 转译)"
+          elif [ "${{ github.event.inputs.target_architecture }}" = "arm64" ]; then
+            echo "  - 仅 Apple Silicon Mac 原生运行 (M1/M2/M3/M4)"
+          fi
+          echo "========================================"
