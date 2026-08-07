@@ -3,6 +3,8 @@ from tkinter import ttk, filedialog, messagebox
 import duckdb
 import pandas as pd
 import os
+import sys
+import shutil
 import threading
 import warnings
 from datetime import datetime
@@ -12,6 +14,94 @@ from tkcalendar import Calendar
 # 忽略 pandas 的 DBAPI2 警告
 warnings.filterwarnings('ignore', message='pandas only supports SQLAlchemy')
 
+# ===== 跨平台路径解析 =====
+# PyInstaller 打包后，sys._MEIPASS 指向临时解压目录（只读）
+# 开发模式下，资源文件在脚本所在目录
+_FROZEN = getattr(sys, 'frozen', False)
+_RESOURCE_DIR = sys._MEIPASS if _FROZEN else os.path.dirname(os.path.abspath(__file__))
+
+
+def resolve_resource(filename):
+    """解析资源文件路径（只读资源，如 SQL 文件、模板）"""
+    return os.path.join(_RESOURCE_DIR, filename)
+
+
+def get_writable_db_path(db_name):
+    """获取可写的数据库路径。
+    macOS .app 包内的资源是只读的，需要将数据库复制到可写位置。
+    优先查找 .app 同级目录（build_exe.py 复制的文件位置），其次从包内复制。
+    """
+    if _FROZEN:
+        if sys.platform == 'darwin':
+            # sys.executable = .app/Contents/MacOS/可执行文件名
+            exe_dir = os.path.dirname(sys.executable)
+            app_contents_dir = os.path.dirname(exe_dir)   # Contents/
+            app_bundle_dir = os.path.dirname(app_contents_dir)  # .app/
+            # .app 同级目录 = dist/（build_exe.py 复制文件的位置）
+            sibling_dir = os.path.dirname(app_bundle_dir)
+        else:
+            exe_dir = os.path.dirname(sys.executable)
+            sibling_dir = exe_dir
+
+        # 1. 优先检查 .app/可执行文件同级目录是否已有数据库
+        candidate = os.path.join(sibling_dir, db_name)
+        if os.path.exists(candidate):
+            return candidate
+
+        # 2. 检查 .app 同级的 data/ 子目录
+        data_dir = os.path.join(sibling_dir, 'data')
+        if os.path.isdir(data_dir):
+            candidate = os.path.join(data_dir, db_name)
+            if os.path.exists(candidate):
+                return candidate
+
+        # 3. 以上都没有，创建可写副本
+        # 确保 data 目录可写
+        try:
+            os.makedirs(data_dir, exist_ok=True)
+            test_file = os.path.join(data_dir, '.write_test')
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+        except (PermissionError, OSError):
+            # 回退到用户数据目录
+            if sys.platform == 'darwin':
+                data_dir = os.path.join(
+                    os.path.expanduser('~/Library/Application Support/前置软件报告生成辅助工具'),
+                    'data'
+                )
+            else:
+                data_dir = os.path.join(
+                    os.path.expanduser('~'), '.前置软件报告生成辅助工具', 'data'
+                )
+            os.makedirs(data_dir, exist_ok=True)
+
+        writable_path = os.path.join(data_dir, db_name)
+
+        # 从 PyInstaller 包内复制数据库到可写位置
+        resource_db = os.path.join(_RESOURCE_DIR, db_name)
+        if not os.path.exists(writable_path) and os.path.exists(resource_db):
+            shutil.copy2(resource_db, writable_path)
+
+        return writable_path
+    else:
+        # 开发模式：直接在脚本所在目录操作
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        dev_path = os.path.join(script_dir, db_name)
+        try:
+            test_file = os.path.join(script_dir, '.write_test')
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+            return dev_path
+        except (PermissionError, OSError):
+            data_dir = os.path.join(os.path.expanduser('~'), '.前置软件报告生成辅助工具')
+            os.makedirs(data_dir, exist_ok=True)
+            writable_path = os.path.join(data_dir, db_name)
+            if not os.path.exists(writable_path) and os.path.exists(dev_path):
+                shutil.copy2(dev_path, writable_path)
+            return writable_path
+
 
 class ReportGeneratorTool:
     def __init__(self, root):
@@ -19,8 +109,8 @@ class ReportGeneratorTool:
         self.root.title("前置软件报告生成辅助工具 V1.4")
         
         # 设置窗口大小并居中
-        window_width = 680
-        window_height = 560
+        window_width = 700
+        window_height = 600
         screen_width = root.winfo_screenwidth()
         screen_height = root.winfo_screenheight()
         x = (screen_width - window_width) // 2
@@ -29,7 +119,7 @@ class ReportGeneratorTool:
         
         self.root.resizable(False, False)
         
-        self.db_path = "qzrj_quality_report.db"
+        self.db_path = get_writable_db_path("qzrj_quality_report.db")
         self.template_path = None
         self.export_path = None
         self.data_dir = None
@@ -405,7 +495,7 @@ class ReportGeneratorTool:
                 self.process_text.delete(1.0, tk.END)
                 
                 # 从 qzrj_generate_data.sql 文件读取 SQL
-                sql_file = 'qzrj_generate_data.sql'
+                sql_file = resolve_resource('qzrj_generate_data.sql')
                 if not os.path.exists(sql_file):
                     raise Exception(f"找不到 SQL 文件：{sql_file}")
                 

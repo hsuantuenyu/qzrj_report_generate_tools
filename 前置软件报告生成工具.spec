@@ -26,7 +26,11 @@ a = Analysis(
     ['report_generator.py'],
     pathex=[],
     binaries=[],
-    datas=[('qzrj_generate_data.sql', '.')],
+    datas=[
+        ('qzrj_generate_data.sql', '.'),
+        ('qzrj_export_sql.sql', '.'),
+        ('qzrj_quality_report.db', '.'),
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
