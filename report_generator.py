@@ -1263,7 +1263,7 @@ order by a.city, a.org_code
         search_label.pack(side=tk.LEFT, padx=5)
 
         self.org_search_var = tk.StringVar()
-        search_entry = ttk.Entry(search_frame, textvariable=self.org_search_var, width=50)
+        search_entry = ttk.Entry(search_frame, textvariable=self.org_search_var, width=25)
         search_entry.pack(side=tk.LEFT, padx=5)
 
         search_btn = ttk.Button(search_frame, text="查询", command=self.refresh_org_tree)
