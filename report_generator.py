@@ -614,8 +614,21 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
         export_name_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=2)
         export_frame.columnconfigure(1, weight=1)
         
-        # 添加路径显示
-        self.export_path_var = tk.StringVar(value=os.path.abspath(default_name))
+        # ===== 默认导出目录：用户文档目录（可写）=====
+        # macOS 上 cwd 通常是只读的 / 或 /Applications，需要使用用户可写目录
+        home_documents = os.path.expanduser('~/Documents')
+        if os.path.isdir(home_documents) and os.access(home_documents, os.W_OK):
+            default_export_dir = home_documents
+        elif os.path.isdir(os.path.expanduser('~')) and os.access(os.path.expanduser('~'), os.W_OK):
+            default_export_dir = os.path.expanduser('~')
+        else:
+            default_export_dir = os.path.dirname(os.path.abspath(__file__))
+
+        self._export_dir = default_export_dir
+
+        # 添加路径显示（完整路径 = 目录 + 文件名）
+        default_full_path = os.path.join(self._export_dir, default_name)
+        self.export_path_var = tk.StringVar(value=default_full_path)
         export_path_label = ttk.Label(export_frame, text="完整路径:")
         export_path_label.grid(row=1, column=0, sticky=tk.W, pady=2)
         
@@ -623,16 +636,22 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
         export_path_entry.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=2)
         export_frame.columnconfigure(1, weight=1)
         
-        # 文件名变化时更新路径
+        # 文件名变化时更新路径（保留目录部分，只替换文件名）
         def update_path(*args):
             filename = self.export_name_var.get()
-            self.export_path_var.set(os.path.abspath(filename))
+            self.export_path_var.set(os.path.join(self._export_dir, filename))
         
         self.export_name_var.trace('w', update_path)
         
-        # 导出按钮
-        export_btn = ttk.Button(frame, text="开始导出报告", command=self.export_report)
-        export_btn.grid(row=2, column=0, pady=2)
+        # 按钮区：选择保存目录 + 导出 + 打开目录
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=2, column=0, pady=2)
+
+        choose_dir_btn = ttk.Button(btn_frame, text="选择保存目录", command=self.choose_export_dir)
+        choose_dir_btn.pack(side=tk.LEFT, padx=5)
+
+        export_btn = ttk.Button(btn_frame, text="开始导出报告", command=self.export_report)
+        export_btn.pack(side=tk.LEFT, padx=5)
         
         self.export_status_label = ttk.Label(frame, text="导出状态：未开始")
         self.export_status_label.grid(row=3, column=0, sticky=tk.W, pady=1)
@@ -673,6 +692,18 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
         if file_path:
             self.template_path = file_path
             self.template_label.config(text=f"模板文件：{os.path.basename(file_path)}")
+
+    def choose_export_dir(self):
+        """选择报告保存目录"""
+        directory = filedialog.askdirectory(
+            title="选择报告保存目录",
+            initialdir=self._export_dir
+        )
+        if directory:
+            self._export_dir = directory
+            filename = self.export_name_var.get()
+            self.export_path_var.set(os.path.join(directory, filename))
+            self.log_message(f"保存目录已设置为：{directory}\n")
             
     def export_report(self):
         """导出报告"""
@@ -903,10 +934,10 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
                 
                 self.root.update_idletasks()
                 
-                export_path = self.export_name_var.get()
-                full_path = os.path.abspath(export_path)
+                export_filename = self.export_name_var.get()
+                full_path = os.path.join(self._export_dir, export_filename)
                 self.log_message(f"\n保存文件到：{full_path}...\n")
-                wb.save(export_path)
+                wb.save(full_path)
                 
                 self.export_progress.stop()
                 self.export_status_label.config(text="导出状态：完成", foreground="green")
