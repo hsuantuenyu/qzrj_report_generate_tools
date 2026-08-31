@@ -50,8 +50,8 @@ SPEC_FILE = os.path.join(PROJECT_ROOT, "前置软件报告生成工具.spec")
 
 # 需要复制到 dist 的目录和文件
 DIRS_TO_COPY = [
-    "0.前置软件质控结果统计_doris查询语句",
-    "1.doris查询结果模板",
+    # "0.前置软件质控结果统计_doris查询语句",
+    # "1.doris查询结果模板",
 ]
 FILES_TO_COPY = [
     "qzrj_quality_report.db",
