@@ -106,7 +106,7 @@ def get_writable_db_path(db_name):
 class ReportGeneratorTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("前置软件报告生成辅助工具 V1.7")
+        self.root.title("前置软件报告生成辅助工具 V1.8")
         
         # 设置窗口大小并居中
         window_width = 700
@@ -1067,7 +1067,7 @@ order by city
     def get_org_summary_sql(self):
         """
         机构汇总 SQL
-        注意：此 SQL 已由用户于 2026-04-19 修正，请勿修改！
+        注意：此 SQL 已由用户于 2026-09-08 修正，请勿修改！
         详见：导出 SQL 说明.md
         """
         return """
@@ -1109,7 +1109,7 @@ order by city
        case
            when g.total_records is null then null
            when g.total_records = 0 then '-'
-           else concat(f.notnull_rate, '%') end     notnull_rate,
+           else concat(g.notnull_rate, '%') end  notnull_rate,
        h.total_records,
        h.notnull_records,
        case
@@ -1121,7 +1121,7 @@ order by city
        case
            when i.total_records is null then null
            when i.total_records = 0 then '-'
-           else concat(I.notnull_rate, '%') end     notnull_rate,
+           else concat(i.notnull_rate, '%') end     notnull_rate,
        j.total_records,
        j.association_records,
        case
@@ -1255,7 +1255,7 @@ order by a.city, a.org_code
            when total_records is null then null
            when total_records = 0 then '-'
            else
-               concat(b.notnull_rate, '%') end notnull_rate
+               concat(round((sum(a.notnull_records) / sum(a.total_records)) * 100, 2), '%') end notnull_rate
 from org_list a
          left join qzrj_column_level_3_detail b on a.org_code = b.org_code
 where a.is_516_flag = '是'
