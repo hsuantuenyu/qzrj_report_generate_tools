@@ -7,8 +7,8 @@ VSVersionInfo(
   ffi=FixedFileInfo(
     # filevers and prodvers should be always a tuple with four items: (1, 2, 3, 4)
     # Set not needed items to zero 0.
-    filevers=(1, 8, 0, 0),
-    prodvers=(1, 8, 0, 0),
+    filevers=(1, 9, 0, 0),
+    prodvers=(1, 9, 0, 0),
     # Contains a bitmask that specifies the valid bits 'flags'
     mask=0x3f,
     # Contains a bitmask that specifies the Boolean attributes of the file.
@@ -32,13 +32,13 @@ VSVersionInfo(
         u'080404B0',
         [StringStruct(u'CompanyName', u'前置软件报告生成工具'),
         StringStruct(u'FileDescription', u'前置软件报告生成辅助工具 - 用于生成疾控中心数据质控报告'),
-        StringStruct(u'FileVersion', u'1.8.0.0'),
+        StringStruct(u'FileVersion', u'1.9.0.0'),
         StringStruct(u'InternalName', u'report_generator'),
         StringStruct(u'LegalCopyright', u'Copyright © 2026'),
         StringStruct(u'OriginalFilename', u'前置软件报告生成工具.exe'),
         StringStruct(u'ProductName', u'前置软件报告生成工具'),
-        StringStruct(u'ProductVersion', u'1.8.0.0'),
-        StringStruct(u'SpecialBuild', u'2026-09-08')])
+        StringStruct(u'ProductVersion', u'1.9.0.0'),
+        StringStruct(u'SpecialBuild', u'2026-10-30')])
       ]), 
     VarFileInfo([VarStruct(u'Translation', [2052, 1200])])
   ]

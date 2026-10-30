@@ -170,7 +170,7 @@ select a.city,count(a.org_code) org_cnt,
        sum(h.notnull_records) h_notnull_records,
        sum(i.total_records) i_total_records,
        sum(i.notnull_records) i_notnull_records,
-       sum(case when j.association_rate >=100 then 1 else 0 end) association_org_cnt,
+       sum(case when j.association_rate >=90 then 1 else 0 end) association_org_cnt,
        sum(case when k.dict_rate >=100 then 1 else 0 end) dict_org_cnt
 from org_list a
  left join qzrj_realtime_org b on b.org_code = a.org_code and b.table_type = '实时表'

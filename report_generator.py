@@ -106,7 +106,7 @@ def get_writable_db_path(db_name):
 class ReportGeneratorTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("前置软件报告生成辅助工具 V1.8")
+        self.root.title("前置软件报告生成辅助工具 V1.9")
         
         # 设置窗口大小并居中
         window_width = 700
@@ -1004,7 +1004,7 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
         详见：导出 SQL 说明.md
         """
         return """
-        select city,
+        select distinct city,
        org_cnt,
        real_cnt,
        concat(round((real_cnt / org_cnt) * 100, 2), '%')                  as real_rate,
@@ -1071,7 +1071,7 @@ order by city
         详见：导出 SQL 说明.md
         """
         return """
-         select a.city,
+         select distinct a.city,
        a.org_code,
        a.org_name,
        b.total_recods,
@@ -1249,16 +1249,17 @@ order by a.city, a.org_code
        a.org_name,
        b.table_name,
        b.table_comment,
-       b.total_records,
-       b.notnull_records,
+       sum(b.total_records) total_records,
+       sum(b.notnull_records) notnull_records,
        case
-           when total_records is null then null
-           when total_records = 0 then '-'
+           when sum(b.total_records) is null then null
+           when sum(b.total_records) = 0 then '-'
            else
-               concat(round((sum(a.notnull_records) / sum(a.total_records)) * 100, 2), '%') end notnull_rate
+               concat(round((sum(b.notnull_records) / sum(b.total_records)) * 100, 2), '%') end notnull_rate
 from org_list a
          left join qzrj_column_level_3_detail b on a.org_code = b.org_code
 where a.is_516_flag = '是'
+group by a.city,a.org_code,a.org_name,b.table_name,b.table_comment
 order by a.city, a.org_code
         """    
         
