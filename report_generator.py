@@ -3,8 +3,10 @@ from tkinter import ttk, filedialog, messagebox
 import duckdb
 import pandas as pd
 import os
+import re
 import sys
 import shutil
+import subprocess
 import threading
 import warnings
 from datetime import datetime
@@ -163,6 +165,14 @@ class ReportGeneratorTool:
     def apply_institution_filter(self, sql):
         """按当前机构类型替换机构标志列（is_516_flag / is_1151_flag）"""
         return sql.replace('is_516_flag', self.get_flag_column())
+
+    def normalize_rate_concat(self, sql):
+        """百分比拼接改用 || 运算符：值为 NULL 时结果为 NULL，不会拼出孤立的 '%'"""
+        return re.sub(r"concat\(\s*(.*?)\s*,\s*'%'\s*\)", r"(\1) || '%'", sql, flags=re.S)
+
+    def prepare_export_sql(self, sql):
+        """导出前统一处理 SQL：机构类型筛选 + 百分比 NULL 处理"""
+        return self.normalize_rate_concat(self.apply_institution_filter(sql))
 
     def on_institution_type_change(self):
         """机构类型切换后的联动处理"""
@@ -900,6 +910,9 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
 
         export_btn = ttk.Button(btn_frame, text="开始导出报告", command=self.export_report)
         export_btn.pack(side=tk.LEFT, padx=5)
+
+        open_dir_btn = ttk.Button(btn_frame, text="打开报告目录", command=self.open_export_dir)
+        open_dir_btn.pack(side=tk.LEFT, padx=5)
         
         self.export_status_label = ttk.Label(frame, text="导出状态：未开始")
         self.export_status_label.grid(row=3, column=0, sticky=tk.W, pady=1)
@@ -953,6 +966,25 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
             self.export_path_var.set(os.path.join(directory, filename))
             self.log_message(f"保存目录已设置为：{directory}\n")
             
+    def open_export_dir(self):
+        """打开报告导出目录"""
+        directory = self._export_dir
+        if not directory or not os.path.isdir(directory):
+            messagebox.showwarning("提示", "报告目录不存在，请先选择保存目录")
+            return
+
+        try:
+            if sys.platform == 'win32':
+                os.startfile(directory)
+            elif sys.platform == 'darwin':
+                subprocess.Popen(['open', directory])
+            else:
+                subprocess.Popen(['xdg-open', directory])
+            self.log_message(f"已打开报告目录：{directory}\n")
+        except Exception as e:
+            self.log_message(f"打开报告目录失败：{e}\n")
+            messagebox.showerror("错误", f"打开报告目录失败：{e}")
+
     def export_report(self):
         """导出报告"""
         if not self.template_path:
@@ -986,8 +1018,8 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
                     '现病史明细': self.get_present_sql()
                 }
 
-                # 按当前机构类型（516 / 1151）替换机构标志列，统一控制各 Sheet 的机构范围
-                export_sheets = {name: self.apply_institution_filter(sql)
+                # 统一处理：按机构类型筛选 + NULL 时不拼接 % 符号
+                export_sheets = {name: self.prepare_export_sql(sql)
                                  for name, sql in export_sheets.items()}
                 
                 total_sheets = len(export_sheets)
@@ -1004,6 +1036,8 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
                             self.root.update_idletasks()
                             
                             df = pd.read_sql_query(sql, conn)
+                            # 空白（NULL）统一赋值为 '-'，表示无数据
+                            df = df.fillna('-')
                             record_count = len(df)
                             self.log_message(f"  查询到 {record_count} 条记录\n")
                             self.root.update_idletasks()
