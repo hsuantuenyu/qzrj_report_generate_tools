@@ -128,6 +128,8 @@ class ReportGeneratorTool:
         self.end_date = tk.StringVar()
         self.end_date.set("")  # 初始化为空
         self.data_imported = False  # 是否已导入数据
+        # 机构类型：516 / 1151，决定数据加工与导出时使用的机构标志列
+        self.institution_type = tk.StringVar(value='516')
 
         # 统一设置滚动条样式：宽度32像素，箭头按钮24像素
         style = ttk.Style()
@@ -135,6 +137,41 @@ class ReportGeneratorTool:
         style.configure("Horizontal.TScrollbar", width=32, arrowsize=24)
         
         self.create_main_interface()
+
+        # 机构类型变化时同步刷新导出文件名与界面提示
+        self.institution_type.trace('w', lambda *args: self.on_institution_type_change())
+
+    def get_flag_column(self):
+        """当前机构类型对应的 org_list 机构标志列"""
+        return 'is_516_flag' if self.institution_type.get() == '516' else 'is_1151_flag'
+
+    def get_export_base_name(self):
+        """当前机构类型对应的导出文件名前缀"""
+        if self.institution_type.get() == '1151':
+            return "基层_前置软件数据质控报告_1151_质控日期："
+        return "疾控中心数据质控报告_质控日期："
+
+    def apply_institution_filter(self, sql):
+        """按当前机构类型替换机构标志列（is_516_flag / is_1151_flag）"""
+        return sql.replace('is_516_flag', self.get_flag_column())
+
+    def on_institution_type_change(self):
+        """机构类型切换后的联动处理"""
+        self.update_export_filename()
+        self.refresh_type_labels()
+        # 汇总表按上一次选择的类型加工，切换后需要重新加工
+        if self.data_imported and hasattr(self, 'process_status_label'):
+            self.process_status_label.config(
+                text="加工状态：机构类型已变更，请重新执行数据加工", foreground="orange")
+
+    def refresh_type_labels(self):
+        """刷新各 Tab 中显示的当前机构类型"""
+        text = (f"当前机构类型：{self.institution_type.get()}　"
+                f"（机构筛选字段：{self.get_flag_column()}）")
+        for attr in ('process_type_label', 'export_type_label'):
+            widget = getattr(self, attr, None)
+            if widget is not None:
+                widget.config(text=text)
         
     def create_main_interface(self):
         """创建主界面"""
@@ -265,7 +302,19 @@ class ReportGeneratorTool:
         end_calendar_btn.grid(row=0, column=5, padx=2)
         
         end_date_entry.bind('<Button-1>', lambda e: self.popup_calendar('end'))
-        
+
+        # 机构类型选择（516 / 1151），后续数据加工与导出按此类型筛选机构
+        type_label = ttk.Label(date_frame, text="机构类型:", font=('微软雅黑', 10, 'bold'))
+        type_label.grid(row=1, column=0, padx=5, pady=(8, 2), sticky=tk.W)
+
+        type_radio_frame = ttk.Frame(date_frame)
+        type_radio_frame.grid(row=1, column=1, columnspan=5, sticky=tk.W, pady=(8, 2))
+
+        ttk.Radiobutton(type_radio_frame, text="516 机构", value='516',
+                        variable=self.institution_type).pack(side=tk.LEFT, padx=(0, 20))
+        ttk.Radiobutton(type_radio_frame, text="1151 机构（基层）", value='1151',
+                        variable=self.institution_type).pack(side=tk.LEFT)
+
         select_btn = ttk.Button(frame, text="选择数据文件目录", command=self.select_data_directory)
         select_btn.grid(row=1, column=0, sticky=tk.W, pady=2)
         
@@ -362,7 +411,7 @@ class ReportGeneratorTool:
         start_date_str = self.start_date.get()
         end_date_str = self.end_date.get()
         if start_date_str and hasattr(self, 'export_name_var'):
-            base_name = "疾控中心数据质控报告_质控日期："
+            base_name = self.get_export_base_name()
             if start_date_str == end_date_str:
                 new_name = f"{base_name}{start_date_str}.xlsx"
             else:
@@ -395,6 +444,16 @@ class ReportGeneratorTool:
         def do_import():
             try:
                 conn = duckdb.connect(self.db_path)
+
+                # 校验 org_list 是否具备当前机构类型对应的标志字段
+                flag_column = self.get_flag_column()
+                org_columns = [col[1] for col in
+                               conn.execute("PRAGMA table_info('org_list')").fetchall()]
+                if flag_column not in org_columns:
+                    raise Exception(
+                        f"org_list 表缺少字段【{flag_column}】，无法按 {self.institution_type.get()} 机构生成报告。\n"
+                        "请先在【5. 机构管理】中维护该字段数据。")
+
                 qzrj_files = [f for f in os.listdir(self.data_dir) if f.startswith('qzrj_') and f.endswith('.xlsx')]
                 
                 if not qzrj_files:
@@ -405,6 +464,9 @@ class ReportGeneratorTool:
                 
                 self.file_list_text.delete(1.0, tk.END)
                 self.file_list_text.insert(tk.END, "开始导入数据...\n")
+                self.file_list_text.insert(
+                    tk.END,
+                    f"当前机构类型：{self.institution_type.get()}（机构筛选字段：{flag_column}）\n")
                 
                 # 排除不需要导入的表
                 skip_tables = ['qzrj_present_detail']
@@ -461,8 +523,16 @@ class ReportGeneratorTool:
         parent.columnconfigure(0, weight=1)
         parent.rowconfigure(0, weight=1)
         
-        sql_label = ttk.Label(frame, text="执行 加工数据 SQL 脚本")
-        sql_label.grid(row=0, column=0, sticky=tk.W, pady=2)
+        header_frame = ttk.Frame(frame)
+        header_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=2)
+
+        sql_label = ttk.Label(header_frame, text="执行 加工数据 SQL 脚本")
+        sql_label.pack(side=tk.LEFT)
+
+        self.process_type_label = ttk.Label(header_frame, text="")
+        self.process_type_label.pack(side=tk.RIGHT)
+
+        self.refresh_type_labels()
         
         self.process_status_label = ttk.Label(frame, text="加工状态：未开始")
         self.process_status_label.grid(row=1, column=0, sticky=tk.W, pady=2)
@@ -501,8 +571,15 @@ class ReportGeneratorTool:
                 
                 with open(sql_file, 'r', encoding='utf-8') as f:
                     sql_content = f.read()
-                
-                self.process_text.insert(tk.END, f"执行 SQL 脚本：{sql_file}\n\n")
+
+                # 按当前机构类型（516 / 1151）替换机构标志列
+                flag_column = self.get_flag_column()
+                sql_content = self.apply_institution_filter(sql_content)
+
+                self.process_text.insert(tk.END, f"执行 SQL 脚本：{sql_file}\n")
+                self.process_text.insert(
+                    tk.END,
+                    f"当前机构类型：{self.institution_type.get()}（机构筛选字段：{flag_column}）\n\n")
                 
                 conn = duckdb.connect(self.db_path)
                 
@@ -601,7 +678,7 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
         
         # 使用当前日期作为默认文件名（日期区间）
         default_date = datetime.now().strftime('%Y-%m-%d')
-        default_name = f"疾控中心数据质控报告_质控日期：{default_date}.xlsx"
+        default_name = f"{self.get_export_base_name()}{default_date}.xlsx"
         self.export_name_var = tk.StringVar(value=default_name)
         
         # 初始化日期变量
@@ -635,6 +712,11 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
         export_path_entry = ttk.Entry(export_frame, textvariable=self.export_path_var, width=80)
         export_path_entry.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=2)
         export_frame.columnconfigure(1, weight=1)
+
+        # 当前机构类型提示（在【2. 数据导入】中切换）
+        self.export_type_label = ttk.Label(export_frame, text="")
+        self.export_type_label.grid(row=2, column=0, columnspan=2, sticky=tk.W, pady=2)
+        self.refresh_type_labels()
         
         # 文件名变化时更新路径（保留目录部分，只替换文件名）
         def update_path(*args):
@@ -737,6 +819,10 @@ in('qzrj_association_org', 'qzrj_column_level_org', 'qzrj_dict_org', 'qzrj_realt
                     '主诉明细': self.get_chief_sql(),
                     '现病史明细': self.get_present_sql()
                 }
+
+                # 按当前机构类型（516 / 1151）替换机构标志列，统一控制各 Sheet 的机构范围
+                export_sheets = {name: self.apply_institution_filter(sql)
+                                 for name, sql in export_sheets.items()}
                 
                 total_sheets = len(export_sheets)
                 processed = 0
@@ -1425,7 +1511,7 @@ order by a.city, a.org_code
         h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
 
         # 定义显示的列
-        self.org_tree = ttk.Treeview(tree_frame, columns=('city', 'org_code', 'org_name', 'is_516_flag', '是否哨点'),
+        self.org_tree = ttk.Treeview(tree_frame, columns=('city', 'org_code', 'org_name', 'is_516_flag', 'is_1151_flag', '是否哨点'),
                                      show='headings', yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
 
         # 设置列标题和宽度
@@ -1433,12 +1519,14 @@ order by a.city, a.org_code
         self.org_tree.heading('org_code', text='机构代码')
         self.org_tree.heading('org_name', text='机构名称')
         self.org_tree.heading('is_516_flag', text='是否516')
+        self.org_tree.heading('is_1151_flag', text='是否1151')
         self.org_tree.heading('是否哨点', text='是否哨点')
 
         self.org_tree.column('city', width=80)
         self.org_tree.column('org_code', width=100)
         self.org_tree.column('org_name', width=200)
         self.org_tree.column('is_516_flag', width=80)
+        self.org_tree.column('is_1151_flag', width=80)
         self.org_tree.column('是否哨点', width=80)
 
         self.org_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -1468,9 +1556,19 @@ order by a.city, a.org_code
         try:
             conn = duckdb.connect(self.db_path)
 
+            # 表字段列表（用于适配是否已增加 is_1151_flag 列）
+            org_columns = [col[1] for col in
+                           conn.execute("PRAGMA table_info('org_list')").fetchall()]
+            has_1151 = 'is_1151_flag' in org_columns
+
+            select_columns = ['city', 'org_code', 'org_name', 'is_516_flag']
+            if has_1151:
+                select_columns.append('is_1151_flag')
+            select_columns.append('是否哨点')
+
             if search_text:
                 sql = f"""
-                    SELECT city, org_code, org_name, is_516_flag, 是否哨点
+                    SELECT {', '.join(select_columns)}
                     FROM org_list
                     WHERE city LIKE '%{search_text}%' 
                        OR org_code LIKE '%{search_text}%' 
@@ -1479,7 +1577,8 @@ order by a.city, a.org_code
                     ORDER BY city, org_code
                 """
             else:
-                sql = "SELECT city, org_code, org_name, is_516_flag, 是否哨点 FROM org_list ORDER BY city, org_code"
+                sql = (f"SELECT {', '.join(select_columns)} FROM org_list"
+                       " ORDER BY city, org_code")
 
             result = conn.execute(sql).fetchall()
             conn.close()
@@ -1488,9 +1587,12 @@ order by a.city, a.org_code
             for item in self.org_tree.get_children():
                 self.org_tree.delete(item)
 
-            # 添加新数据（NULL 值显示为空字符串）
+            # 添加新数据（NULL 值显示为空字符串，缺列时补空值）
             for row in result:
-                display_row = tuple('' if v is None else v for v in row)
+                values = list(row)
+                if not has_1151:
+                    values.insert(4, '')
+                display_row = tuple('' if v is None else v for v in values)
                 self.org_tree.insert('', tk.END, values=display_row)
 
             self.org_status_label.config(text=f"机构管理：共 {len(result)} 条记录", foreground="black")
@@ -1592,13 +1694,14 @@ order by a.city, a.org_code
             'org_code': '机构编码',
             'org_name': '机构名称',
             'is_516_flag': '是否516标志',
+            'is_1151_flag': '是否1151标志',
             'station_hospital': '是否哨点医院',
             'is_412名单': '是否412名单',
         }
         # 必填字段
         REQUIRED_FIELDS = ['city', 'org_code', 'org_name', 'is_516_flag']
         # 下拉选项字段
-        DROPDOWN_FIELDS = ['is_412名单', 'is_516_flag','是否哨点', '是否分院区', '是否基层', '是否26', '是否满足实时要求',
+        DROPDOWN_FIELDS = ['is_412名单', 'is_516_flag', 'is_1151_flag', '是否哨点', '是否分院区', '是否基层', '是否26', '是否满足实时要求',
                            '是否主院区']
 
         for col_name in columns:

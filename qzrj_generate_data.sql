@@ -157,9 +157,9 @@ order by a.city,a.org_code;
 truncate table qzrj_city_summary;
 insert into qzrj_city_summary
 select a.city,count(distinct a.org_code) org_cnt,
-       sum(case when b.compliance_rate >=90 then 1 else 0 end) real_cnt,
-       sum(case when c.compliance_rate >=100 then 1 else 0 end ) hour_cnt,
-       sum(case when d.compliance_rate >=100 then 1 else 0 end) other_cnt,
+       count(distinct case when b.compliance_rate >=90 then a.org_code end) real_cnt,
+       count(distinct case when c.compliance_rate >=100 then a.org_code end ) hour_cnt,
+       count(distinct case when d.compliance_rate >=100 then a.org_code end) other_cnt,
        sum(e.total_records) e_total_records,
        sum(e.notnull_records) e_notnull_records,
        sum(f.total_records) f_total_records,
